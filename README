@@ -1,0 +1,58 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=141
+
+Description:
+This file contains functions/menus/commands/abbreviations to make Vim an
+Oracle SQL*Plus IDE.
+Here are the main highlights of this script:
+
+- SqlMake(): lets you open any stored procedure and compile from within vim.
+	 Will display and optionally highlight the errors, navigate
+	 thru errors in the quickfix mode.
+	
+- Adds a SQL*Plus menu
+
+- SqlPlus(): lets you start an external SQL*Plus, execute the whole file
+	 contents in SQL*Plus and return the results back in the same
+	 buffer, or select a portion of the buffer, execute it and
+	 display the results in a new buffer.
+
+- GetSource(): get the stored procedure code from the database
+
+- Abbreviations: lot of abbreviations to make coding in PL/SQL a breeze,
+	 all accessible thru menu as well
+
+Mappings:
+
+  <Leader>c	Select Database dialog
+  <Leader>C	Get column names for the tablename under cursor
+  <Leader>F	Stored procedure code from DB for the function/procedure name
+  		under cursor
+  <Leader>i	Find Invalid Objects
+  CTRL+S 		Start SQL*Plus window (external)
+  <Leader>r	Execute current file in SQL*Plus window (external)
+  <Leader>s	Execute current file in SQL*Plus and get the result to same
+  		buffer
+  <Leader>s	Execute current selection in SQL*Plus and get the result to a
+  		new window
+
+  Following mappings from ftplugin sql.vim
+  <C-D>		Describe the object under cursor
+  <LocalLeader>d	make a dbms_output.put_line statement for word/selection
+  		below current line
+  <LocalLeader>D	make a dbms_output.put_line statement for word/selection
+  		above current line
+
+
+Optional files:
+  sql.vim	- sql filetype plugin load to your ftplugin folders. This file is
+  		  needed for Abbreviations and some mappings
+
+Note:
+	I have tested this only under gvim6.0 on Win2000 and Oracle 8.1.5. I do
+	not have any other platform to test these.
+
+Screen Shots:
+http://www.geocities.com/rajesh_kallingal/vim/vimsql01.jpg
+http://www.geocities.com/rajesh_kallingal/vim/vimsql02.jpg
+If the above links don't work try this one.
+http://www.geocities.com/rajesh_kallingal/vim
