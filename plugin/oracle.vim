@@ -2,8 +2,8 @@
 " File: oracle.vim
 " Purpose: Oracle SQL*Plus Plugin
 " Author: Rajesh Kallingal <RajeshKallingal@email.com>
-" Version: 6.0.2
-" Last Modified: Mon Nov 26 10:45:47 2001
+" Version: 6.0.3
+" Last Modified: Fri Jan 11 16:09:38 2002
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 "
 " Description:
@@ -148,6 +148,30 @@ function! ChangeConnection ()
 	if l:server != ""
 		let s:server = l:server
 	endif
+endfunction
+
+
+function! DescribeObject ()
+	call CheckConnection ()
+	let l:user=s:user
+	let l:password=s:password
+	let l:server=s:server
+
+	" create a new buffer with server:user:object.sql name and delete all the
+	" texts
+	silent execute 'new ' . l:server . ':' . l:user . ':' . @" . '.sql'
+	normal ggdG
+
+	" create the SQL statements for describe and execute
+	let l:object = @"
+	call append (0, "prompt " . l:object)
+	call append (1, "desc " . l:object )
+	1,$call SqlPlus()
+
+	"delete the SQL> prompts
+	normal dW+df 
+	set ts=8 nomodified
+"	execute 'new ' . l:server . ':' . l:user . ':' .  '".sql'<CR>iprompt "desc "\sdW+df :set ts=8 nomodified
 endfunction
 
 " months_between_ym 
