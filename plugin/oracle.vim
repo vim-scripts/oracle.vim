@@ -2,8 +2,8 @@
 " File: oracle.vim
 " Purpose: Oracle SQL*Plus Plugin
 " Author: Rajesh Kallingal <RajeshKallingal@email.com>
-" Version: 6.0.3
-" Last Modified: Fri Jan 11 16:09:38 2002
+" Version: 6.0.4
+" Last Modified: Tue Feb 05 11:14:08 2002
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 "
 " Description:
@@ -76,8 +76,8 @@
 " 	in the ftplugin folder/directory
 "
 "TODO
-"	- save/retrieve connection info between sessions
-"	- define & use s:connect_string variable
+"	- add more SQL*Plus commmands
+"	- replace normal commands
 "
 " vim:ts=4:sw=4:tw=75
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -95,20 +95,80 @@ set cpo&vim
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Variables
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" following are the default values for the variables used to connect to an
+" Oracle instance. you can change these variables to connect to a different
+" instance or as a different user. use :CC command to change the connection
+" variables. The value will be remembered for the future sessions based on the
+" value of s:save_settings
+
+let s:sqlcmd='sqlplus '	" executable name of SQL*Plus (non GUI version), if sqlplus is not in the PATH, use the complete path to sqlplus. Make sure you insert a space before the ending quote (')
+let s:user=''	" Default Oracle user name
+let s:password=''	" Default Oracle password
+let s:server=''	" Default Oracle server to use
+let g:dateformat="'YYYYMMDD HH24MI'"	" Default date format to use
+let s:do_highlight_errors=1 " set this variable to 1 to highlight errors after compiling, set to 0 to turn it off
+let s:save_settings=1	"set this variable to 1 if you want the session info saved for next Vim session.
+
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Commands
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+command! SqlMake call SqlMake ()
 command! CC call ChangeConnection ()
 command! -range=% Sql call SqlPlus ()
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Functions
-"""""""""""""""""""""""""""""""venma28@hotmail.com"""""""""""""""""""""""""""""""""""""""""""""
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+function! ORAInitialize()
+	" This function initializes variables from the previous session if
+	" available.
+	
+	if s:save_settings != 1
+		" don't load connection info from the previous session
+		let s:connect_string = s:user . '/' . s:password . '@' .  s:server
+		return
+	endif
+
+	if exists('g:SQLCMD')
+		let s:sqlcmd = g:SQLCMD
+	endif
+
+	if exists('g:USER')
+		" Oracle user name
+		let s:user = g:USER
+	endif
+	if exists('g:PASSWORD')
+		" Oracle user password
+		let s:password = g:PASSWORD
+	endif
+	if exists('g:SERVER')
+		" Oracle server name
+		let s:server = g:SERVER
+	endif
+
+	let s:connect_string = s:user . '/' . s:password . '@' .  s:server
+
+"	let g:dateformat="'YYYYMMDD HH24MI'"	" Default date format to use
+
+	if exists('g:DO_HIGHLIGHT_ERRORS')
+		let s:do_highlight_errors = g:DO_HIGHLIGHT_ERRORS
+	endif
+
+endfunction
+
+
+
 
 function! CheckModified ()
 	"check the file is modified
 	if &modified
-		let l:choice = confirm ("Do you want to save changes before running?", "&Yes\n&No\n&Cancel", 1, "Question")
+		let l:choice = confirm ("Do you want to save changes before continuing?", "&Yes\n&No\n&Cancel", 1, "Question")
 		if l:choice == 1
 			write
 		elseif l:choice == 2
@@ -129,6 +189,15 @@ function! CheckConnection ()
 	if exists ("s:user") == 0 || exists ("s:password") == 0 || exists ("s:server") == 0 || s:user == "" || s:password == "" || s:server == ""
 		call ChangeConnection ()
 	endif
+	" if the variables are still not set return error
+	if exists ("s:user") == 0 || exists ("s:password") == 0 || exists ("s:server") == 0 || s:user == "" || s:password == "" || s:server == ""
+		echohl ErrorMsg
+		echo "Invalid connection information"
+		echohl None
+		return -1
+	else
+		return 0
+	endif
 endfunction
 
 
@@ -148,47 +217,96 @@ function! ChangeConnection ()
 	if l:server != ""
 		let s:server = l:server
 	endif
+
+	let s:connect_string = s:user . '/' . s:password . '@' .  s:server
+
 endfunction
 
 
 function! DescribeObject ()
-	call CheckConnection ()
-	let l:user=s:user
-	let l:password=s:password
-	let l:server=s:server
+	if CheckConnection () != 0
+		return
+	endif
 
 	" create a new buffer with server:user:object.sql name and delete all the
 	" texts
-	silent execute 'new ' . l:server . ':' . l:user . ':' . @" . '.sql'
-	normal ggdG
+	let l:object = @"
+	silent execute 'new ' . s:server . ':' . s:user . ':' . l:object . '.sql'
+	1,$delete	" empty the buffer
 
 	" create the SQL statements for describe and execute
-	let l:object = @"
 	call append (0, "prompt " . l:object)
 	call append (1, "desc " . l:object )
 	1,$call SqlPlus()
 
 	"delete the SQL> prompts
 	normal dW+df 
-	set ts=8 nomodified
-"	execute 'new ' . l:server . ':' . l:user . ':' .  '".sql'<CR>iprompt "desc "\sdW+df :set ts=8 nomodified
+	setlocal ts=8 nomodified
+
 endfunction
 
-" months_between_ym 
+
+
+function! GetColumn ()
+" Get column names for the tablename under cursor. This will delete the
+" current line. So make sure you have just the table name in the current line
+	if CheckConnection () != 0
+		return
+	endif
+
+	normal yiw
+	let l:object = @"
+	silent execute 'new '
+	call append (0, "Desc " . l:object . "")
+
+	%call SqlPlus()
+
+	" remove the first 2 and last lines
+	silent delete 2
+	silent $delete
+
+	let old_search=@/
+	" replace everything after column with comma ","
+	%s/ \(\S\+\)\s.*/\1,/
+	" remove the comma from last line
+	s/,//
+	let @/=old_search
+	unlet old_search
+
+	" yank everything
+	normal yap
+	bdelete!
+	normal ]pkdd
+
+endfunction
+
+
 
 function! GetSource ()
 	" Get the source of the function/procedure under the cursor
+	if CheckConnection () != 0
+		return
+	endif
+
 	normal yiw
-	let l:obj_name = @"
-	silent execute 'new ' . g:SERVER . ':' . g:USER . ':' . l:obj_name . '.sql'
-	silent execute "call append (0, \"Upper ('" . l:obj_name . "');\")"
+	let l:object = @"
+	silent execute 'new ' . s:server . ':' . s:user . ':' . l:object . '.sql'
+	call append (0, "Upper ('" . l:object . "');")
 	call append (0, 'select text from user_source where name = ')
 	call append (0, 'set pagesize 0')
-	normal \s
-	let l:old_search = @/
-	silent execute '/PROCEDURE\|FUNCTION'
-	normal hvggdGkdGgg
-	let @/ = l:old_search
+
+	%call SqlPlus()
+
+	" now remove the unwanted SQL*Plus prompts and add some SQL verbs
+	normal 3dW
+	call append (0, "CREATE OR REPLACE ")
+	1join
+
+	$-2,$delete
+	call append ("$", "/")
+	1
+	setlocal nomodified
+
 endfunction
 
 
@@ -203,23 +321,27 @@ function! SelectDatabase ()
 	if l:choice == 0
 		return
 	elseif l:choice == 1
-		let s:USER = 'username'
-		let s:PASSWORD = 'password'
-		let s:SERVER = 'edmprod'
+		let s:user = 'username'
+		let s:password = 'password'
+		let s:server = 'edmprod'
+		let s:connect_string = s:user . '/' . s:password . '@' .  s:server
 	elseif l:choice == 2
-		let s:USER = 'username'
-		let s:PASSWORD = 'password'
-		let s:SERVER = 'edmdevl'
+		let s:user = 'username'
+		let s:password = 'password'
+		let s:server = 'edmdevl'
+		let s:connect_string = s:user . '/' . s:password . '@' .  s:server
 	elseif l:choice == 3
-		let s:USER = 'username'
-		let s:PASSWORD = 'password'
-		let s:SERVER = 'edwprod'
+		let s:user = 'username'
+		let s:password = 'password'
+		let s:server = 'edwprod'
+		let s:connect_string = s:user . '/' . s:password . '@' .  s:server
 	elseif l:choice == 4
-		let s:USER = 'username'
-		let s:PASSWORD = 'password'
-		let s:SERVER = 'eodsprod'
+		let s:user = 'username'
+		let s:password = 'password'
+		let s:server = 'eodsprod'
+		let s:connect_string = s:user . '/' . s:password . '@' .  s:server
 	elseif l:choice == 5
-	call ChangeConnection ()
+		call ChangeConnection ()
 	else
 		return
 	endif
@@ -234,26 +356,9 @@ function! SqlPlus (...) range
 " 	the same buffer
 " 	- execute the selected lines from the current buffer and show results in a
 " 	new buffer
-	let l:sqlcmd=g:SQLCMD
-	call CheckConnection ()
-	let l:user=s:user
-	let l:password=s:password
-	let l:server=s:server
 
-	if l:sqlcmd == ""
-		let l:sqlcmd = input ("Enter user-name:plus33\b\b\b\b\b\b")
-		if l:sqlcmd == ""
-			let l:sqlcmd = "sqlplus "
-		endif
-	endif
-	if l:user == ""
-		let l:user = input ("Enter userid: ")
-	endif
-	if l:password == ""
-		let l:password = inputsecret ("Enter Password: ")
-	endif
-	if l:server == ""
-		let l:server = input ("Enter Server: ")
+	if CheckConnection () != 0
+		return
 	endif
 
 	"echo a:0
@@ -265,39 +370,42 @@ function! SqlPlus (...) range
 			if CheckModified () == -1
 				return
 			endif
-			silent execute '!' . l:sqlcmd . ' ' . l:user . '/' . l:password . '@' .  l:server . ' @' . a:2
+			silent execute '!' . s:sqlcmd . ' ' . s:connect_string . ' @' . a:2
 		else
 			" just start SQL*Plus
-			silent execute '!start ' . l:sqlcmd . l:user . '/' . l:password . '@' .  l:server
+			silent execute '!start ' . s:sqlcmd . s:connect_string
 		endif
 	else
 		" Execute the range and display the result in buffer
 		"echo a:firstline "," a:lastline
-		silent execute a:firstline ',' a:lastline '!' . l:sqlcmd . ' ' . l:user . '/' . l:password . '@' .  l:server
+		silent execute a:firstline ',' a:lastline '!' . s:sqlcmd . ' ' . s:connect_string
+
 		let l:old_search = @/
 		" this is for standard SQLPROMPT
 		silent execute '/SQL>'
 		" use the following search for user@server> SQLPROMPT
-		"silent execute "/" . l:user . '@' . l:server . ' >'
-		" remove the unwanted details from top & bottom SQL*Plus
+		"silent execute "/" . s:user . '@' . s:server . ' >'
+		" remove the unwanted SQL*Plus details from top & bottom
 		silent execute "normal kVggdGNdGgg"
-		"silent execute "g/" . l:user . '@' . l:server . ' >/d'
+		"silent execute "g/" . s:user . '@' . s:server . ' >/d'
 		let @/ = l:old_search
-		setlocal ts=8
+		setlocal ts=8 nomodified
 	endif
 endfunction
 
 
 function! InvalidObjects (Option)
-	call CheckConnection ()
-	silent execute "new invalid_objects.sql"
+	if CheckConnection () != 0
+		return
+	endif
+	silent execute 'new ' . s:server . ':' . s:user . ':invalid_objects.sql'
 	if a:Option == "C" || a:Option == "c"
 		"TODO
 		"echo "Compile Invalid Objects"
 "		normal ggVGsset serveroutput on size 1000000exec dbms_output.put_line ( re_compile )\s
 	else
 		"echo "List Invalid Objects"
-		normal ggVGsselect object_name || ' ' || object_type from all_objects where status = 'INVALID';\s
+		normal ggVGsselect object_type, object_name from all_objects where status = 'INVALID';\s
 	endif
 endfunction
 
@@ -310,19 +418,15 @@ function! SqlMake ()
 " Change the following settings (done in sql.vim ftplugin):
 " To use multiline error format of SQL*Plus
 " 	set efm=%E%l/%c%m,%C%m,%Z
-"
-" set the folloiwng global variable if you want highlight the lines with
-" Errors
-" let g:do_highlight_errors=1
-"
-
 
 	"check the file is modified
 	if CheckModified () == -1
 		return
 	endif
 
-	call CheckConnection ()
+	if CheckConnection () != 0
+		return
+	endif
 "	close the error window, in case its open
 	cclose
 	redraw
@@ -355,8 +459,8 @@ function! SqlMake ()
 	silent write
 
 " compile the l:sqlfile in SQL*Plus
-	let l:connect_string = s:user . '/' . s:password . '@' . s:server
-	let l:command = g:SQLCMD . l:connect_string . " @" .  l:sqlfile
+"	let l:connect_string = s:user . '/' . s:password . '@' . s:server
+	let l:command = s:sqlcmd . s:connect_string . " @" .  l:sqlfile
 "echo l:command
 	echohl MoreMsg
 	echo "Compiling..."
@@ -381,10 +485,10 @@ function! SqlMake ()
 	" if vih has +signs then use signs else put special character ("--ERR--")
 	" for highlighting on the error lines if this is used an autocmd event for
 	" BufWritePre will remove all these error marks/signs
-	if l:error_exists != 0 && exists ("g:DO_HIGHLIGHT_ERRORS") && g:DO_HIGHLIGHT_ERRORS == 1
+	if l:error_exists != 0 && exists ("s:do_highlight_errors") && s:do_highlight_errors == 1
 		" save the modified status
 		let l:mod_flag = &modified
-		let l:error_lines = s:sqlErrLines
+		let l:error_lines = s:sqlErrLines " this variable is set in FormatErrorMessage() function
 		" if its a vim with +sings then use signs else use --ERR-- to
 		" mark and highlight error lines
 		if has ("signs")
@@ -479,7 +583,7 @@ function! FormatErrorMessage (sqloutput)
 
 		" map the linenumbers
 		let l:new_errmsg = ''
-		let s:sqlErrLines = ''
+		let s:sqlErrLines = '' " use a script variable to return the formatted error message
 		while strlen (l:errmsgs)
 			" first get the line/col part of the current message
 			let l:match_pos = matchend (l:errmsgs,'[0-9]\+\/[0-9]\+\t')
@@ -521,6 +625,20 @@ function! FormatErrorMessage (sqloutput)
 endfunction
 
 
+function! ORAVimLeavePre()
+	" save the connection information in global variables
+
+	let g:SQLCMD = s:sqlcmd
+	let g:USER = s:user
+	let g:PASSWORD = s:password
+	let g:SERVER = s:server
+"	let g:DATEFORMAT = s:dateformat
+	let g:DO_HIGHLIGHT_ERRORS = s:do_highlight_errors
+	
+endfunction
+
+
+
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Mappings
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -529,12 +647,11 @@ endfunction
 nmap <Leader>c :call SelectDatabase ()<CR>
 
 "get column names for the tablename under cursor
-"TODO won't work if the CheckConnection prompt comes on
-nmap <Leader>C yawniDesc "\s2dd)dG<gg:let old_search=@/:%s/\s.*/,/$xggyG:bd!]pkdd:let @/=old_search:unlet old_search
+nmap <Leader>C :call GetColumn()<CR>
 
 " Stored procedure code from DB for the function/procedure name under cursor
 "TODO make this a function
-map <Leader>F yaw:silent execute 'new ' . s:server . ':' . s:user . ':' . '".sql'<CR>iset pagesize 0<CR>select text from all_source where Upper (name) = Upper ("bi'ea');\s/PROCEDURE\\|FUNCTION<CR>hvggdGkdGgg
+map <Leader>F :call GetSource()<CR>
 
 " Find Invalid Objects
 map <Leader>i :call InvalidObjects ('')<CR>
@@ -543,7 +660,7 @@ map <Leader>i :call InvalidObjects ('')<CR>
 "map <Leader>I :call InvalidObjects ('C')<CR>
 
 " Start SQL*Plus window
-nmap  :call SqlPlus (1)<CR>
+nmap <C-S> :call SqlPlus (1)<CR>
 
 " Execute current file in SQL*Plus window
 map <Leader>r :call SqlPlus ('@', @%)<CR>
@@ -717,16 +834,7 @@ endif
 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Script Variables
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-let s:user='scott'	" Oracle user name
-let s:password='tiger'	" Oracle password
-let s:server=''	" Oracle server to use
-let s:dateformat="'YYYYMMDD HH24MI'"	" Default date format to use
-
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Variables
+" Signs
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 if has("signs")
 	let v:errmsg = ""
@@ -738,36 +846,22 @@ endif
 
 
 
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Variables
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-"following are the default values for the variables used to connect to an
-"Oracle instance. you can change these variables to connect to a different
-"instance or as a different user. use :CC command to change the connection
-"variables. The value will be remembered for the future sessions.
-
-let g:SQLCMD='sqlplus '	" executable name of SQL*Plus (non GUI version), if sqlplus is not in the PATH, use the complete path to sqlplus
-"let g:USER='username'	" Oracle user name
-"let g:PASSWORD='password'	" Oracle password
-"let g:SERVER='odssb'	" Oracle server to use
-let g:dateformat="'YYYYMMDD HH24MI'"	" Default date format to use
-let g:DO_HIGHLIGHT_ERRORS=1
-
-
-
 augroup SqlPlus
 "  au!
 "
 " This is to remove any error indicators that was added as part of SqlMake().
-autocmd! BufWritePre,FileWritePre *.sql,*.pls
-if has("signs")
-	autocmd BufWritePre,FileWritePre *.sql,*.pls normal :sign unplace *
-else
-	autocmd BufWritePre,FileWritePre *.sql,*.pls normal :g/ --ERR\d*--/s///g
-endif
+	autocmd! BufWritePre,FileWritePre *.sql,*.pls
+	if has("signs")
+		autocmd BufWritePre,FileWritePre *.sql,*.pls normal :sign unplace *
+	else
+		autocmd BufWritePre,FileWritePre *.sql,*.pls normal :g/ --ERR\d*--/s///g
+	endif
 
-"  autocmd BufEnter *.iqd,*.sql,*.pls,afiedt.buf, source $VIM/user/sqlEnter.vim
-"  autocmd BufLeave,WinLeave *.iqd,*.sql,*.pls,afiedt.buf source $VIM/user/sqlLeave.vim
+	"  autocmd BufEnter *.iqd,*.sql,*.pls,afiedt.buf, source $VIM/user/sqlEnter.vim
+	"  autocmd BufLeave,WinLeave *.iqd,*.sql,*.pls,afiedt.buf source $VIM/user/sqlLeave.vim
+
+	au VimEnter * call ORAInitialize()
+	au VimLeavePre * nested call ORAVimLeavePre()
 augroup end
 
 " restore 'cpo'

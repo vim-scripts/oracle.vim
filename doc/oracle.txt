@@ -1,0 +1,107 @@
+*oracle.txt*	Plugin making vim an Oracle SQL*Plus IDE
+                                                                       
+For Vim version 6.0.  Last change:  2002 Feb 5
+
+
+		  VIM REFERENCE MANUAL    by Rajesh Kallingal
+
+For instructions on installing this file, type
+	:help add-local-help
+|add-local-help| inside Vim.
+
+*oracle* *oracle.vim* *oracle-ide*
+
+1. Overview						|oracle-overview|
+1. Installation						|oracle-install|
+2. Configuration					|oracle-configure|
+3. Mappings						|oracle-mappings|
+4. SqlMake						|oracle-sqlmake|
+
+The functionality mentioned here is a plugin, see |add-plugin|.
+
+{Vi does not have any of this}
+
+==============================================================================
+1. Overview						*oracle-overview*
+
+ This plugin contains functions/menus/commands to make Vim an Oracle SQL*Plus
+ IDE. The main features that is provided in the plugin are:
+    - SqlMake: Compile and debug Oracle stored procedures from within vim
+    - Execute SQL statments and get the results back to vim buffer
+    - Describe tables, Insert columns of the tables, Get stored procedure code
+      from the database
+    - Lots of abbreviations (needs sql.vim ftplugin)
+     
+
+ Optional files:
+    sql.vim - sql filetype plugin load to your ftplugin folders. This file is
+              needed for Abbreviations and some mappings
+
+ Note:
+    I have tested this only under gvim6.0 on Win2000 and Oracle 8.1.5. I do not
+    have any other platform to test these.
+
+
+==============================================================================
+1. Installing the plugin				*oracle-install*
+
+ You can use this script as a plugin by copying it to your plugin directory. See |add-global-plugin| for instructions.
+
+
+==============================================================================
+1. Configuration					*oracle-configure*
+
+ There are several variables (and one sign) that govern the behavior of
+ oracle.vim. Most of the varialbes are local to the script except one global
+ variable. These variables are used as the default oracle connection
+ information.
+
+  							*oracle-save-settings*
+ You can have the connection information saved and reloaded for the next Vim
+ session by setting save_settings script variable to 1.
+
+				*oracle-hightlight-error* *do_highlight_errors*
+			    	*SQLMakeError*
+ You can have the compile errors highlighted by setting do_highlight_errors
+ script varialbe to 1. This uses signs feature (|+signs|) if available.
+ Otherwise it adds a hidden text "--ERR--" on the error lines and removes them
+ when you save the file.
+
+
+
+==============================================================================
+1. Mappings						*oracle-mappings*
+
+    <Leader>c    Select Database dialog
+    <Leader>C    Get column names for the tablename under cursor
+    <Leader>F    Stored procedure code from DB for the function/procedure name
+    	         under cursor
+    <Leader>i    Find Invalid Objects
+    CTRL+S       Start SQL*Plus window (external)
+    <Leader>r    Execute current file in SQL*Plus window (external)
+    <Leader>s    Execute current file in SQL*Plus and get the result to same
+    		 buffer. In visual mode the results are displayed in a new
+    		 window
+
+ QuickFix mode mappings
+    Alt-M        Make/Compile the script and enter quickfix mode
+    Alt-Up/Down  Go to next/previous error
+    Alt-A        List all the errors
+    Alt-C        List current error
+    Alt-O        Open error window
+
+
+ Following mappings from ftplugin sql.vim
+    <C-D>            Describe the object under cursor
+    <LocalLeader>d   make a dbms_output.put_line statement for word/selection
+    		     below current line
+    <LocalLeader>D   make a dbms_output.put_line statement for word/selection
+		     above current line
+
+==============================================================================
+4. SqlMake (Compile)		*oracle-sqlmake* *SqlMake* *oracle-compile*
+
+ SqlMake is like :make (|:make|) for other programming languages. You can open
+ any oracle stored procedure and compile them from within vim. If there are any
+ errors, this will let highlight all the errors (See |do_highlight_errors|) and
+ lets you navigate through errors in quickfix mode (See |quickfix|).
