@@ -2,14 +2,14 @@
 " File: oracle.vim
 " Purpose: Oracle SQL*Plus Plugin
 " Author: Rajesh Kallingal <RajeshKallingal@email.com>
-" Version: 6.0.1
-" Last Modified: Sun Nov 11 20:27:00 2001
+" Version: 6.0.2
+" Last Modified: Mon Nov 26 10:45:47 2001
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 "
 " Description:
-" This file contains functions/menus/commands/abbreviations to integrate Vim &
-" Oracle SQL*Plus. Here is a list of activities that you can do with this
-" script.
+" This file contains functions/menus/commands/abbreviations to make Vim an
+" Oracle SQL*Plus IDE.
+" Here are the main highlights of this script:
 "
 " 	- SqlMake(): lets you open any stored procedure and compile from within vim.
 " 				 Will display and optionally highlight the errors, navigate
@@ -41,7 +41,15 @@
 "	<Leader>s	Execute current selection in SQL*Plus and get the result to a
 "				new window
 "
-"	Following mappings from ftplugin sql.vim
+" QuickFix mode mappings
+"	Alt-M		Make/Compile the script and enter quickfix mode
+"	Alt-Up/Down	Go to next/previous error
+"	Alt-A		List all the errors
+"	Alt-C		List current error
+"	Alt-O		Open error window
+"
+"
+" Following mappings from ftplugin sql.vim
 "	<C-D>			Describe the object under cursor
 "	<LocalLeader>d	make a dbms_output.put_line statement for word/selection
 "					below current line
@@ -54,6 +62,18 @@
 " Optional files:
 "	sql.vim	- sql filetype plugin load to your ftplugin folders. This file is
 "			  needed for Abbreviations and some mappings
+"
+" Note:
+" 	I have tested this only under gvim6.0 on Win2000 and Oracle 8.1.5. I do
+" 	not have any other platform to test these.
+"
+" Installation:
+" 	Just drop it this file in your plugin folder/directory
+"
+" Installation:
+" 	Just drop it this file in your plugin folder/directory. To get some of the
+" 	additional features you have to download the ftplugin sql.vim and put that
+" 	in the ftplugin folder/directory
 "
 "TODO
 "	- save/retrieve connection info between sessions
@@ -334,22 +354,37 @@ function! SqlMake ()
 	execute 'silent buffer ' . l:cur_buf
 "	buffer # " now we are back in the original buffer
 
-	" put special character ("--ERR--") for highlighting on the error lines
-	" if this is used an autocmd event for BufWritePre will remove all these
-	" error marks
+	" if vih has +signs then use signs else put special character ("--ERR--")
+	" for highlighting on the error lines if this is used an autocmd event for
+	" BufWritePre will remove all these error marks/signs
 	if l:error_exists != 0 && exists ("g:DO_HIGHLIGHT_ERRORS") && g:DO_HIGHLIGHT_ERRORS == 1
 		" save the modified status
 		let l:mod_flag = &modified
-		let l:error_lines = g:sqlErrLines
-		while strlen (l:error_lines) > 1
-			let l:line_num = matchstr (l:error_lines, '[0-9]\+')
-"echo 'l:line_num : ' l:line_num 
-			if l:line_num != ""
-				let l:line_text = getline (l:line_num) . " --ERR--"
-				call setline (l:line_num, l:line_text)
-			endif
-			let l:error_lines = strpart (l:error_lines, strlen (l:line_num) + 1, 99999999)
-		endwhile
+		let l:error_lines = s:sqlErrLines
+		" if its a vim with +sings then use signs else use --ERR-- to
+		" mark and highlight error lines
+		if has ("signs")
+			let l:sign_count = 0
+			while strlen (l:error_lines) > 1
+				let l:line_num = matchstr (l:error_lines, '[0-9]\+')
+	"echo 'l:line_num : ' l:line_num 
+				if l:line_num != ""
+					let l:sign_count = l:sign_count + 1
+					execute 'sign place ' . l:sign_count . ' line=' . l:line_num . ' name=SQLMakeError buffer=' . l:cur_buf
+				endif
+				let l:error_lines = strpart (l:error_lines, strlen (l:line_num) + 1, 99999999)
+			endwhile
+		else
+			while strlen (l:error_lines) > 1
+				let l:line_num = matchstr (l:error_lines, '[0-9]\+')
+	"echo 'l:line_num : ' l:line_num 
+				if l:line_num != ""
+					let l:line_text = getline (l:line_num) . " --ERR--"
+					call setline (l:line_num, l:line_text)
+				endif
+				let l:error_lines = strpart (l:error_lines, strlen (l:line_num) + 1, 99999999)
+			endwhile
+		endif
 		let &modified = l:mod_flag
 	endif
 
@@ -420,7 +455,7 @@ function! FormatErrorMessage (sqloutput)
 
 		" map the linenumbers
 		let l:new_errmsg = ''
-		let g:sqlErrLines = ''
+		let s:sqlErrLines = ''
 		while strlen (l:errmsgs)
 			" first get the line/col part of the current message
 			let l:match_pos = matchend (l:errmsgs,'[0-9]\+\/[0-9]\+\t')
@@ -444,7 +479,7 @@ function! FormatErrorMessage (sqloutput)
 			let l:new_linenum = l:linenum + l:comments_count
 			let l:new_errmsg = l:new_errmsg . l:new_linenum . strpart (l:curr_msg, strlen (l:linenum), 99999999)
 			"store linenumbers in a global variable
-			let g:sqlErrLines = g:sqlErrLines . l:new_linenum . ';'
+			let s:sqlErrLines = s:sqlErrLines . l:new_linenum . ';'
 "echo 'l:new_errmsg : ' l:new_errmsg 
 		endwhile
 
@@ -494,6 +529,29 @@ map <Leader>s :1,$call SqlPlus()<CR>
 
 " Execute current selection in SQL*Plus and get the result to a new window
 vmap <Leader>s yn[P\s
+
+" QuickFix mode (Conditional)
+"
+" Make (Alt+M)
+if mapcheck ("í") == ""
+ map í :Make<CR>
+
+
+" Map Alt - <Up>/<Down> to do a previous/next error
+ map <M-Up> :cp<CR>
+ map <M-Down> :cn<CR>
+
+" Alt-A - list all errors
+ map á :c!<CR>
+
+" Alt-C - list current error
+ map ã :cc!<CR>
+
+" Alt-O - open error window
+ map ï :copen<CR>
+endif
+
+
 
 
 
@@ -643,6 +701,18 @@ let s:server=''	" Oracle server to use
 let s:dateformat="'YYYYMMDD HH24MI'"	" Default date format to use
 
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Variables
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+if has("signs")
+	let v:errmsg = ""
+	silent! sign list SQLMakeError
+	if "" != v:errmsg
+		sign define SQLMakeError linehl=Error text=?> texthl=Error
+	endif
+endif
+
+
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Variables
@@ -666,7 +736,11 @@ augroup SqlPlus
 "
 " This is to remove any error indicators that was added as part of SqlMake().
 autocmd! BufWritePre,FileWritePre *.sql,*.pls
-autocmd BufWritePre,FileWritePre *.sql,*.pls normal :g/ --ERR\d*--/s///g
+if has("signs")
+	autocmd BufWritePre,FileWritePre *.sql,*.pls normal :sign unplace *
+else
+	autocmd BufWritePre,FileWritePre *.sql,*.pls normal :g/ --ERR\d*--/s///g
+endif
 
 "  autocmd BufEnter *.iqd,*.sql,*.pls,afiedt.buf, source $VIM/user/sqlEnter.vim
 "  autocmd BufLeave,WinLeave *.iqd,*.sql,*.pls,afiedt.buf source $VIM/user/sqlLeave.vim
